@@ -1,0 +1,11 @@
+{
+  "name": "dynamic-resolution-camera",
+  "version": "1.0.0",
+  "description": "Web-based camera preview with dynamic resolution switching, FPS overlay, and video recording.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": ["camera", "webcam", "resolution", "recording", "webrtc"],
+  "license": "MIT"
+}

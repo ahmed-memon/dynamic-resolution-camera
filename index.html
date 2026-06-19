@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Resolution Camera</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        h1 {
+            margin-bottom: 10px;
+            font-size: 1.5rem;
+            color: #00d4ff;
+        }
+        #statusBar {
+            margin-bottom: 15px;
+            padding: 8px 18px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-family: 'Consolas', monospace;
+            background: #16213e;
+            color: #aaa;
+            min-width: 300px;
+            text-align: center;
+        }
+        #statusBar.error { color: #f66; background: #2a1020; }
+        #statusBar.success { color: #0f0; }
+        #statusBar.working { color: #ff0; }
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            align-items: flex-start;
+            margin-bottom: 20px;
+            background: #16213e;
+            padding: 15px 25px;
+            border-radius: 10px;
+            max-width: 100%;
+        }
+        .controls > div > label {
+            font-weight: 600;
+            margin-bottom: 5px;
+            display: block;
+            color: #00d4ff;
+        }
+        select {
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid #0f3460;
+            background: #0f3460;
+            color: #eee;
+            font-size: 0.9rem;
+            min-width: 220px;
+            cursor: pointer;
+        }
+        .resolution-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            max-width: 700px;
+        }
+        .resolution-group label {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            background: #0f3460;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: normal;
+            color: #ccc;
+            font-size: 0.85rem;
+            transition: background 0.2s;
+        }
+        .resolution-group label:hover { background: #1a4a7a; }
+        .resolution-group input[type="radio"]:checked + span {
+            color: #00d4ff;
+            font-weight: 600;
+        }
+        .preview-container {
+            position: relative;
+            display: inline-block;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            transition: width 0.3s ease, height 0.3s ease;
+        }
+        video {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background: #000;
+        }
+        .overlay {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-family: 'Consolas', monospace;
+            pointer-events: none;
+            color: #0f0;
+            line-height: 1.5;
+        }
+        .no-camera {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #666;
+            font-size: 1.1rem;
+            width: 640px;
+            height: 480px;
+        }
+        .button-bar {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .button-bar button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s, opacity 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .button-bar button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        #btnStartCamera {
+            background: #0a8f3c;
+            color: #fff;
+        }
+        #btnStartCamera:hover:not(:disabled) { background: #0cb04a; }
+        #btnStopCamera {
+            background: #c0392b;
+            color: #fff;
+        }
+        #btnStopCamera:hover:not(:disabled) { background: #e74c3c; }
+        #btnStartRecord {
+            background: #d35400;
+            color: #fff;
+        }
+        #btnStartRecord:hover:not(:disabled) { background: #e67e22; }
+        #btnStopRecord {
+            background: #8e44ad;
+            color: #fff;
+        }
+        #btnStopRecord:hover:not(:disabled) { background: #a95ec4; }
+        .rec-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #f00;
+            animation: blink 1s infinite;
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.2; }
+        }
+    </style>
+</head>
+<body>
+    <h1>Dynamic Resolution Camera Preview</h1>
+    <div id="statusBar">Initializing...</div>
+
+    <div class="controls">
+        <div>
+            <label for="cameraSelect">Camera</label>
+            <select id="cameraSelect">
+                <option value="">-- Select Camera --</option>
+            </select>
+        </div>
+        <div>
+            <label>Resolution</label>
+            <div class="resolution-group" id="resolutionGroup">
+                <span style="color:#666;">Select a camera first</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="button-bar">
+        <button id="btnStartCamera" disabled>▶ Start Camera</button>
+        <button id="btnStopCamera" disabled>■ Stop Camera</button>
+        <button id="btnStartRecord" disabled>⏺ Start Recording</button>
+        <button id="btnStopRecord" disabled>⏹ Stop Recording</button>
+    </div>
+
+    <div class="preview-container" id="previewContainer">
+        <div class="no-camera" id="placeholder">No camera selected</div>
+        <video id="video" autoplay playsinline muted style="display:none;"></video>
+        <div class="overlay" id="overlay" style="display:none;">
+            <div id="overlayRes">--</div>
+            <div id="overlayFps">--</div>
+        </div>
+    </div>
+
+    <script>
+        const cameraSelect = document.getElementById('cameraSelect');
+        const resolutionGroup = document.getElementById('resolutionGroup');
+        const video = document.getElementById('video');
+        const overlay = document.getElementById('overlay');
+        const overlayRes = document.getElementById('overlayRes');
+        const overlayFps = document.getElementById('overlayFps');
+        const previewContainer = document.getElementById('previewContainer');
+        const placeholder = document.getElementById('placeholder');
+        const statusBar = document.getElementById('statusBar');
+        const btnStartCamera = document.getElementById('btnStartCamera');
+        const btnStopCamera = document.getElementById('btnStopCamera');
+        const btnStartRecord = document.getElementById('btnStartRecord');
+        const btnStopRecord = document.getElementById('btnStopRecord');
+
+        let currentStream = null;
+        let maxResolution = null;
+        let fpsCounter = { frames: 0, lastTime: performance.now(), fps: 0 };
+        let mediaRecorder = null;
+        let recordedChunks = [];
+        let selectedResolution = null;
+
+        function setStatus(msg, type = '') {
+            statusBar.textContent = msg;
+            statusBar.className = type;
+        }
+
+        function updateButtonStates() {
+            const hasDevice = !!cameraSelect.value;
+            const isStreaming = !!currentStream;
+            const isRecording = mediaRecorder && mediaRecorder.state === 'recording';
+
+            btnStartCamera.disabled = !hasDevice || isStreaming;
+            btnStopCamera.disabled  = !isStreaming;
+            btnStartRecord.disabled = !isStreaming || isRecording;
+            btnStopRecord.disabled  = !isRecording;
+        }
+
+        const commonResolutions = [
+            { width: 320,  height: 240,  label: '320×240 (QVGA)' },
+            { width: 640,  height: 360,  label: '640×360 (nHD)' },
+            { width: 640,  height: 480,  label: '640×480 (VGA)' },
+            { width: 800,  height: 600,  label: '800×600 (SVGA)' },
+            { width: 1024, height: 768,  label: '1024×768 (XGA)' },
+            { width: 1280, height: 720,  label: '1280×720 (HD)' },
+            { width: 1280, height: 960,  label: '1280×960' },
+            { width: 1920, height: 1080, label: '1920×1080 (FHD)' },
+            { width: 2560, height: 1440, label: '2560×1440 (QHD)' },
+            { width: 3840, height: 2160, label: '3840×2160 (4K)' },
+        ];
+
+        // ── Camera enumeration ─────────────────────────────
+        async function enumerateCameras() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                setStatus('ERROR: Browser does not support camera access. Use HTTPS or localhost.', 'error');
+                return;
+            }
+
+            setStatus('Requesting camera permission...', 'working');
+
+            try {
+                const tempStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                tempStream.getTracks().forEach(t => t.stop());
+            } catch (e) {
+                setStatus(`Camera permission denied: ${e.name} - ${e.message}`, 'error');
+                return;
+            }
+
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const videoDevices = devices.filter(d => d.kind === 'videoinput');
+
+            cameraSelect.innerHTML = '<option value="">-- Select Camera --</option>';
+            videoDevices.forEach((device, idx) => {
+                const opt = document.createElement('option');
+                opt.value = device.deviceId;
+                opt.textContent = device.label || `Camera ${idx + 1}`;
+                cameraSelect.appendChild(opt);
+            });
+
+            if (videoDevices.length === 0) {
+                setStatus('No cameras found. Connect a camera and reload.', 'error');
+            } else {
+                setStatus(`Found ${videoDevices.length} camera(s). Select one to begin.`, 'success');
+            }
+        }
+
+        // ── Resolution detection via getCapabilities ────────
+        async function getSupportedResolutions(deviceId) {
+            setStatus('Opening camera to detect resolutions...', 'working');
+
+            let stream;
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { deviceId: { exact: deviceId } }
+                });
+            } catch (e) {
+                setStatus(`Cannot open camera: ${e.name} - ${e.message}`, 'error');
+                return [];
+            }
+
+            const track = stream.getVideoTracks()[0];
+            let supported = [];
+
+            if (typeof track.getCapabilities === 'function') {
+                const caps = track.getCapabilities();
+                const maxW = caps.width  ? caps.width.max  : 1920;
+                const maxH = caps.height ? caps.height.max : 1080;
+                const minW = caps.width  ? caps.width.min  : 160;
+                const minH = caps.height ? caps.height.min : 120;
+
+                supported = commonResolutions.filter(res =>
+                    res.width >= minW && res.width <= maxW &&
+                    res.height >= minH && res.height <= maxH
+                );
+
+                // Always include the native max if it's not already listed
+                const hasMax = supported.some(r => r.width === maxW && r.height === maxH);
+                if (!hasMax) {
+                    supported.push({ width: maxW, height: maxH, label: `${maxW}×${maxH} (Native Max)` });
+                }
+
+                if (supported.length === 0) {
+                    supported.push({ width: maxW, height: maxH, label: `${maxW}×${maxH} (Max)` });
+                }
+
+                setStatus(`Detected range: ${minW}×${minH} → ${maxW}×${maxH}  (${supported.length} options)`, 'success');
+            } else {
+                // Fallback for browsers without getCapabilities (e.g. Firefox)
+                const settings = track.getSettings();
+                const defW = settings.width || 640;
+                const defH = settings.height || 480;
+                supported = commonResolutions.filter(r => r.width <= defW * 2 && r.height <= defH * 2);
+                if (supported.length === 0) {
+                    supported.push({ width: defW, height: defH, label: `${defW}×${defH} (Default)` });
+                }
+                setStatus(`getCapabilities not available; offering ${supported.length} options (best-effort)`, 'working');
+            }
+
+            track.stop();
+            stream.getTracks().forEach(t => t.stop());
+            return supported;
+        }
+
+        // ── Render resolution radio buttons ─────────────────
+        function renderResolutions(resolutions) {
+            resolutionGroup.innerHTML = '';
+            if (resolutions.length === 0) {
+                resolutionGroup.innerHTML = '<span style="color:#666;">No resolutions detected</span>';
+                return;
+            }
+            resolutions.forEach((res, i) => {
+                const lbl = document.createElement('label');
+                const radio = document.createElement('input');
+                radio.type = 'radio';
+                radio.name = 'resolution';
+                radio.value = `${res.width}x${res.height}`;
+                radio.dataset.width = res.width;
+                radio.dataset.height = res.height;
+                if (i === resolutions.length - 1) radio.checked = true;
+                radio.addEventListener('change', () => applyResolution(res.width, res.height));
+                const span = document.createElement('span');
+                span.textContent = res.label;
+                lbl.appendChild(radio);
+                lbl.appendChild(span);
+                resolutionGroup.appendChild(lbl);
+            });
+        }
+
+        // ── Compute preview container size ──────────────────
+        function computePreviewSize(resWidth, resHeight) {
+            if (!maxResolution) return { width: resWidth, height: resHeight };
+
+            const maxAvailWidth  = window.innerWidth  - 60;
+            const maxAvailHeight = window.innerHeight - 250;
+
+            // Scale so that the max resolution fills the available space
+            const scaleFactor = Math.min(
+                maxAvailWidth  / maxResolution.width,
+                maxAvailHeight / maxResolution.height,
+                1
+            );
+
+            return {
+                width:  Math.round(resWidth  * scaleFactor),
+                height: Math.round(resHeight * scaleFactor)
+            };
+        }
+
+        // ── Apply selected resolution ───────────────────────
+        async function applyResolution(width, height) {
+            const deviceId = cameraSelect.value;
+            if (!deviceId) return;
+
+            // Stop recording if active
+            stopRecording();
+            // Stop any existing stream
+            stopCurrentStream();
+
+            setStatus(`Starting camera at ${width}×${height}...`, 'working');
+
+            try {
+                currentStream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        deviceId: { exact: deviceId },
+                        width:  { ideal: width },
+                        height: { ideal: height }
+                    }
+                });
+            } catch (e) {
+                setStatus(`Failed to start camera: ${e.name} - ${e.message}`, 'error');
+                updateButtonStates();
+                return;
+            }
+
+            video.srcObject = currentStream;
+            video.style.display = 'block';
+            placeholder.style.display = 'none';
+            overlay.style.display = 'block';
+
+            // Wait for video to actually start playing
+            try {
+                await video.play();
+            } catch (e) {
+                setStatus(`Video play failed: ${e.message}`, 'error');
+                updateButtonStates();
+                return;
+            }
+
+            // Read the actual resolution the camera delivered
+            const track = currentStream.getVideoTracks()[0];
+            const settings = track.getSettings();
+            const actualWidth  = settings.width  || width;
+            const actualHeight = settings.height || height;
+
+            selectedResolution = { width: actualWidth, height: actualHeight };
+
+            const size = computePreviewSize(actualWidth, actualHeight);
+            previewContainer.style.width  = size.width  + 'px';
+            previewContainer.style.height = size.height + 'px';
+
+            overlayRes.textContent = `Resolution: ${actualWidth} × ${actualHeight}`;
+            overlayFps.textContent = 'Frame Rate: measuring...';
+            startFpsCounter();
+
+            setStatus(`Streaming ${actualWidth}×${actualHeight} from ${track.label}`, 'success');
+            updateButtonStates();
+        }
+
+        function stopCurrentStream() {
+            if (currentStream) {
+                currentStream.getTracks().forEach(t => t.stop());
+                currentStream = null;
+            }
+            video.srcObject = null;
+            if (video._fpsRAF) {
+                cancelAnimationFrame(video._fpsRAF);
+                video._fpsRAF = null;
+            }
+            selectedResolution = null;
+            updateButtonStates();
+        }
+
+        // ── Recording ───────────────────────────────────────
+        function startRecording() {
+            if (!currentStream) return;
+
+            recordedChunks = [];
+            const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+                ? 'video/webm;codecs=vp9'
+                : MediaRecorder.isTypeSupported('video/webm')
+                    ? 'video/webm'
+                    : '';
+
+            try {
+                mediaRecorder = new MediaRecorder(currentStream, mimeType ? { mimeType } : {});
+            } catch (e) {
+                setStatus(`Recording failed: ${e.message}`, 'error');
+                return;
+            }
+
+            const recorderMimeType = mediaRecorder.mimeType || 'video/webm';
+
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data && e.data.size > 0) recordedChunks.push(e.data);
+            };
+
+            mediaRecorder.onstop = async () => {
+                if (recordedChunks.length === 0) {
+                    setStatus('Recording stopped — no data captured.', 'error');
+                    mediaRecorder = null;
+                    updateButtonStates();
+                    return;
+                }
+                const blob = new Blob(recordedChunks, { type: recorderMimeType });
+
+                // Use File System Access API (Edge/Chrome) for save-as dialog
+                if (window.showSaveFilePicker) {
+                    try {
+                        const handle = await window.showSaveFilePicker({
+                            suggestedName: `recording_${new Date().toISOString().replace(/[:.]/g, '-')}.webm`,
+                            types: [{
+                                description: 'WebM Video',
+                                accept: { 'video/webm': ['.webm'] }
+                            }]
+                        });
+                        const writable = await handle.createWritable();
+                        await writable.write(blob);
+                        await writable.close();
+                        setStatus(`Recording saved as "${handle.name}" (${(blob.size / 1024 / 1024).toFixed(1)} MB)`, 'success');
+                    } catch (e) {
+                        if (e.name !== 'AbortError') {
+                            setStatus(`Save failed: ${e.message}`, 'error');
+                        } else {
+                            setStatus('Save cancelled.', 'working');
+                        }
+                    }
+                } else {
+                    // Fallback: prompt for filename then download
+                    const defaultName = `recording_${new Date().toISOString().replace(/[:.]/g, '-')}.webm`;
+                    const fileName = prompt('Enter file name for the recording:', defaultName);
+                    if (fileName) {
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = fileName.endsWith('.webm') ? fileName : fileName + '.webm';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                        setStatus(`Recording saved as "${a.download}" (${(blob.size / 1024 / 1024).toFixed(1)} MB)`, 'success');
+                    } else {
+                        setStatus('Save cancelled.', 'working');
+                    }
+                }
+                mediaRecorder = null;
+                updateButtonStates();
+            };
+
+            mediaRecorder.start(1000); // collect data every second
+            setStatus('⏺ Recording...', 'error');
+            updateButtonStates();
+        }
+
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+                // mediaRecorder is cleared in the onstop callback after saving
+            }
+        }
+
+        // ── FPS counter using requestVideoFrameCallback ─────
+        function startFpsCounter() {
+            if (video._fpsRAF) cancelAnimationFrame(video._fpsRAF);
+
+            fpsCounter = { frames: 0, lastTime: performance.now(), fps: 0 };
+
+            // Prefer requestVideoFrameCallback for accurate FPS
+            if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
+                let frameCount = 0;
+                let lastTime = performance.now();
+
+                function onVideoFrame(now, metadata) {
+                    frameCount++;
+                    const elapsed = now - lastTime;
+                    if (elapsed >= 1000) {
+                        const fps = Math.round((frameCount * 1000) / elapsed);
+                        overlayFps.textContent = `Frame Rate: ${fps} fps`;
+                        frameCount = 0;
+                        lastTime = now;
+                    }
+                    video._fpsRAF = video.requestVideoFrameCallback(onVideoFrame);
+                }
+                video._fpsRAF = video.requestVideoFrameCallback(onVideoFrame);
+            } else {
+                // Fallback to requestAnimationFrame
+                function countFrame() {
+                    fpsCounter.frames++;
+                    const now = performance.now();
+                    const elapsed = now - fpsCounter.lastTime;
+                    if (elapsed >= 1000) {
+                        fpsCounter.fps = Math.round((fpsCounter.frames * 1000) / elapsed);
+                        fpsCounter.frames = 0;
+                        fpsCounter.lastTime = now;
+                        overlayFps.textContent = `Frame Rate: ${fpsCounter.fps} fps`;
+                    }
+                    video._fpsRAF = requestAnimationFrame(countFrame);
+                }
+                video._fpsRAF = requestAnimationFrame(countFrame);
+            }
+        }
+
+        // ── Button events ───────────────────────────────────
+        btnStartCamera.addEventListener('click', async () => {
+            const checked = document.querySelector('input[name="resolution"]:checked');
+            if (checked) {
+                await applyResolution(parseInt(checked.dataset.width), parseInt(checked.dataset.height));
+            }
+        });
+
+        btnStopCamera.addEventListener('click', () => {
+            stopRecording();
+            stopCurrentStream();
+            video.style.display = 'none';
+            overlay.style.display = 'none';
+            placeholder.style.display = 'flex';
+            setStatus('Camera stopped.', '');
+        });
+
+        btnStartRecord.addEventListener('click', () => startRecording());
+        btnStopRecord.addEventListener('click', () => stopRecording());
+
+        // ── Event: camera selection ─────────────────────────
+        cameraSelect.addEventListener('change', async () => {
+            const deviceId = cameraSelect.value;
+            if (!deviceId) {
+                stopRecording();
+                stopCurrentStream();
+                video.style.display = 'none';
+                overlay.style.display = 'none';
+                placeholder.style.display = 'flex';
+                resolutionGroup.innerHTML = '<span style="color:#666;">Select a camera first</span>';
+                setStatus('Select a camera to begin.', '');
+                updateButtonStates();
+                return;
+            }
+
+            resolutionGroup.innerHTML = '<span style="color:#aaa;">Detecting resolutions...</span>';
+            const supported = await getSupportedResolutions(deviceId);
+
+            maxResolution = supported.length > 0
+                ? { width: supported[supported.length - 1].width, height: supported[supported.length - 1].height }
+                : null;
+
+            renderResolutions(supported);
+            updateButtonStates();
+            setStatus('Resolutions loaded. Click "Start Camera" to begin.', 'success');
+        });
+
+        // ── Recompute on window resize ──────────────────────
+        window.addEventListener('resize', () => {
+            const checked = document.querySelector('input[name="resolution"]:checked');
+            if (checked && currentStream) {
+                const track = currentStream.getVideoTracks()[0];
+                const settings = track.getSettings();
+                const w = settings.width  || parseInt(checked.dataset.width);
+                const h = settings.height || parseInt(checked.dataset.height);
+                const size = computePreviewSize(w, h);
+                previewContainer.style.width  = size.width  + 'px';
+                previewContainer.style.height = size.height + 'px';
+            }
+        });
+
+        // ── Init ────────────────────────────────────────────
+        enumerateCameras();
+        if (navigator.mediaDevices) {
+            navigator.mediaDevices.addEventListener('devicechange', enumerateCameras);
+        }
+    </script>
+</body>
+</html>

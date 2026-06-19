@@ -1,0 +1,15 @@
+Start-Process python -ArgumentList "-m","http.server","8080" -WorkingDirectory "c:\Ahmed\Code\dynamic_resolution_camera" -PassThru | Select-Object Id
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/index.html
+
+ dynamic_resolution_camera/
+ ├── index.html      ← Main app (single file, no build)
+ ├── server.js       ← Zero-dependency Node.js server
+ ├── start.bat       ← One-click launcher (auto-opens browser)
+ ├── package.json    ← npm metadata + start script
+ └── README.md       ← Setup guide, usage, troubleshooting
+
+How your team uses it:
+
+ 1. Clone/copy the folder
+ 2. Double-click start.bat — or run npm start
+ 3. Browser opens to http://localhost:8080
